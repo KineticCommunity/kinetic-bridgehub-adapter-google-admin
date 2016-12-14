@@ -5,6 +5,20 @@
     <artifactId>kinetic-bridgehub-adapter-googleadmin</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
+
+    <name>kinetic-bridgehub-adapter-google-admin</name>
+    <scm>
+        <connection>scm:git:https://github.com/kineticcommunity/kinetic-bridgehub-adapter-google-admin.git</connection>
+        <developerConnection>scm:git:https://github.com/kineticcommunity/kinetic-bridgehub-adapter-google-admin.git</developerConnection>
+    </scm>
+
+    <repositories>
+        <repository>
+          <id>com.kineticdata</id>
+          <url>http://utilities.kineticdata.com/nexus/content/repositories/releases/</url>
+        </repository>
+    </repositories>
+
     <dependencies>
         <dependency>
             <groupId>junit</groupId>
@@ -21,6 +35,12 @@
             <groupId>com.google.oauth-client</groupId>
             <artifactId>google-oauth-client-jetty</artifactId>
             <version>1.21.0</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.mortbay.jetty</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.google.apis</groupId>
@@ -28,9 +48,9 @@
             <version>directory_v1-rev63-1.21.0</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.kineticdata.bridges.adapter</groupId>
             <artifactId>kinetic-bridgehub-adapter</artifactId>
-            <version>1.0.1</version>
+            <version>1.0.3</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -42,35 +62,68 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.6</maven.compiler.source>
-        <maven.compiler.target>1.6</maven.compiler.target>
-        <maven.build.timestamp.format>yyyy-MM-dd</maven.build.timestamp.format>
+        <maven.compiler.target>1.6<<dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>kinetic-bridgehub-adapter</artifactId>
+            <version>[1.0.0,2.0.0)</version>
+        </dependency>/maven.compiler.target>
+        <maven.build.timestamp.format>yyyy-MM-dd HH:mm</maven.build.timestamp.format>
     </properties>
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-install-plugin</artifactId>
-                <version>2.5.2</version>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>buildnumber-maven-plugin</artifactId>
+                <version>1.3</version>
                 <executions>
                     <execution>
-                        <id>install-bridgehub-adapter</id>
-                        <phase>clean</phase>
-                        <configuration>
-                            <file>${basedir}/lib/kinetic-bridgehub-adapter-1.0.1.jar</file>
-                            <repositoryLayout>default</repositoryLayout>
-                            <groupId>com.kineticdata.bridges.adapter</groupId>
-                            <artifactId>kinetic-bridgehub-adapter</artifactId>
-                            <version>1.0.1</version>
-                            <packaging>jar</packaging>
-                            <generatePom>true</generatePom>
-                        </configuration>
+                        <phase>validate</phase>
                         <goals>
-                            <goal>install-file</goal>
+                            <goal>create</goal>
                         </goals>
+                        <configuration>
+                            <doCheck>false</doCheck>
+                            <doUpdate>false</doUpdate>
+                            <shortRevisionLength>7</shortRevisionLength>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>generate-timestamp</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>create</goal>
+                        </goals>
+                        <configuration>
+                            <doCheck>false</doCheck>
+                            <doUpdate>false</doUpdate>
+                            <buildNumberPropertyName>buildDate</buildNumberPropertyName>
+                            <format>{0,date,yyyy-MM-dd HH:mm:ss Z}</format>
+                            <items>
+                                <item>timestamp</item>
+                            </items>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.0.2</version>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Build-Time>${maven.build.timestamp}</Build-Time>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
         </plugins>
-        <finalName>${project.artifactId}-${project.version}-${maven.build.timestamp}</finalName>
+        <finalName>${project.artifactId}-${project.version}</finalName>
     </build>
 </project>

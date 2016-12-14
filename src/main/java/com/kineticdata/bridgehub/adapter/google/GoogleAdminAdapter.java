@@ -39,6 +39,20 @@ public class GoogleAdminAdapter implements BridgeAdapter {
     
     /** Defines the logger */
     protected static final org.slf4j.Logger logger = LoggerFactory.getLogger(GoogleAdminAdapter.class);
+
+    /** Adapter version constant. */
+    public static String VERSION;
+    /** Load the properties version from the version.properties file. */
+    static {
+        try {
+            java.util.Properties properties = new java.util.Properties();
+            properties.load(GoogleAdminAdapter.class.getResourceAsStream("/"+GoogleAdminAdapter.class.getName()+".version"));
+            VERSION = properties.getProperty("version");
+        } catch (IOException e) {
+            logger.warn("Unable to load "+GoogleAdminAdapter.class.getName()+" version properties.", e);
+            VERSION = "Unknown";
+        }
+    }
     
     /** Defines the collection of property names for the adapter. */
     public static class Properties {
@@ -75,7 +89,7 @@ public class GoogleAdminAdapter implements BridgeAdapter {
     
     @Override
     public String getVersion() {
-       return  "1.0.0";
+       return VERSION;
     }
     
     @Override
@@ -86,8 +100,6 @@ public class GoogleAdminAdapter implements BridgeAdapter {
     @Override
     public void setProperties(Map<String,String> parameters) {
         properties.setValues(parameters);
-        
-
     }
     
     @Override
@@ -144,11 +156,6 @@ public class GoogleAdminAdapter implements BridgeAdapter {
     
     @Override
     public Count count(BridgeRequest request) throws BridgeError {
-        // Log the access
-        logger.trace("Counting the records");
-        logger.trace("  Structure: " + request.getStructure());
-        logger.trace("  Query: " + request.getQuery());
-        
         if (!VALID_STRUCTURES.contains(request.getStructure())) {
             throw new BridgeError("Invalid Structure: '" + request.getStructure() + "' is not a valid structure");
         }
@@ -188,12 +195,6 @@ public class GoogleAdminAdapter implements BridgeAdapter {
     
     @Override
     public Record retrieve(BridgeRequest request) throws BridgeError {
-        
-        // Log the access
-        logger.trace("  Structure: " + request.getStructure());
-        logger.trace("  Query: " + request.getQuery());
-        logger.trace("  Fields: " + request.getFieldString());
-
         String structure = request.getStructure();
         if (!VALID_STRUCTURES.contains(structure)) {
             throw new BridgeError("Invalid Structure: '" + structure + "' is not a valid structure");
@@ -244,17 +245,12 @@ public class GoogleAdminAdapter implements BridgeAdapter {
                 record.put(field,value);
             }
         }
-    return new Record(record);
+
+        return new Record(record);
     }
 
     @Override
     public RecordList search(BridgeRequest request) throws BridgeError {
-        // Log the access
-        logger.trace("Searching the records");
-        logger.trace("  Structure: " + request.getStructure());
-        logger.trace("  Fields: " + request.getFieldString());
-        logger.trace("  Query: " + request.getQuery());
-        
         // Initialize the result data and response variables
         Map<String,Object> data = new LinkedHashMap();
 
