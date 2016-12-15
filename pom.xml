@@ -6,7 +6,6 @@
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <name>kinetic-bridgehub-adapter-google-admin</name>
     <scm>
         <connection>scm:git:https://github.com/kineticcommunity/kinetic-bridgehub-adapter-google-admin.git</connection>
         <developerConnection>scm:git:https://github.com/kineticcommunity/kinetic-bridgehub-adapter-google-admin.git</developerConnection>
@@ -62,11 +61,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.6</maven.compiler.source>
-        <maven.compiler.target>1.6<<dependency>
-            <groupId>${project.groupId}</groupId>
-            <artifactId>kinetic-bridgehub-adapter</artifactId>
-            <version>[1.0.0,2.0.0)</version>
-        </dependency>/maven.compiler.target>
+        <maven.compiler.target>1.6</maven.compiler.target>
         <maven.build.timestamp.format>yyyy-MM-dd HH:mm</maven.build.timestamp.format>
     </properties>
     <build>
