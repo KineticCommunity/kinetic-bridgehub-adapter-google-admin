@@ -24,6 +24,8 @@ import com.google.api.services.admin.directory.DirectoryScopes;
 import com.google.api.services.admin.directory.model.*;
 import com.google.api.services.admin.directory.Directory;
 import java.security.GeneralSecurityException;
+import java.util.HashMap;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.LoggerFactory;
 
 /**
@@ -59,17 +61,21 @@ public class GoogleAdminAdapter implements BridgeAdapter {
         public static final String EMAIL = "Service Account Email";
         public static final String P12_FILE = "P12 File Location";
         public static final String USER_IMPERSONATION = "Impersonated User Email";
+        public static final String DOMAIN = "Domain";
     }
 
     private String email;
     private String p12File;
     private String userImpersonation;
+    private String domain;
     private Directory directory;
 
     private final ConfigurablePropertyMap properties = new ConfigurablePropertyMap(
             new ConfigurableProperty(Properties.EMAIL).setIsRequired(true),
             new ConfigurableProperty(Properties.P12_FILE).setIsRequired(true),
-            new ConfigurableProperty(Properties.USER_IMPERSONATION).setIsRequired(true)
+            new ConfigurableProperty(Properties.USER_IMPERSONATION).setIsRequired(true),
+            new ConfigurableProperty(Properties.DOMAIN).setIsRequired(false).setDescription("Optionally set the domain where "
+                    + "the bridge will query. The domain can also be set in each individual bridge query if it isn't set here.")
     );
     
     /**
@@ -107,6 +113,7 @@ public class GoogleAdminAdapter implements BridgeAdapter {
         this.email = properties.getValue(Properties.EMAIL);
         this.p12File = properties.getValue(Properties.P12_FILE);
         this.userImpersonation = properties.getValue(Properties.USER_IMPERSONATION);
+        this.domain = properties.getValue(Properties.DOMAIN);
         this.directory = setBridge();
     }
     
@@ -156,157 +163,135 @@ public class GoogleAdminAdapter implements BridgeAdapter {
     
     @Override
     public Count count(BridgeRequest request) throws BridgeError {
+        // Validate the Structure
         if (!VALID_STRUCTURES.contains(request.getStructure())) {
             throw new BridgeError("Invalid Structure: '" + request.getStructure() + "' is not a valid structure");
         }
+        
+        // If the metadata is null, set it to an empty map so the while loop can
+        // easily add the next page token to the metadata as needed
+        if (request.getMetadata() == null) request.setMetadata(new HashMap<String,String>());
 
-        GoogleAdminQualificationParser parser = new GoogleAdminQualificationParser();
-        String query = parser.parse(request.getQuery(),request.getParameters());
-        
-        Users result;
-        String domain = null;
-        String fields = null;
-        if(!query.isEmpty()){
-            String[] keyValueArray = query.split("&");
-            for(String pair : keyValueArray){
-                String[] individualValue = pair.split("=");
-                if(individualValue[0].trim().toLowerCase().equals("domain")){
-                    domain = individualValue[1].trim();
-                }
-//              TODO: should we allow counts on other feild than just email.                
-//              if(individualValue[0].toLowerCase().equals("fields")){
-//                  fields = individualValue[1];
-//              }
-            }
+        // Get the count of the users by looping over and counting all the returned
+        // pages
+        Users users = requestUsers(request);
+        int count = users.getUsers() != null ? users.getUsers().size() : 0;
+        while (users.getUsers() != null && users.getNextPageToken() != null) {
+            request.getMetadata().put("pageToken",users.getNextPageToken());
+            users = requestUsers(request);
+            count += users.getUsers().size();
         }
-//      This is required if count on other feilds beside email is used        
-//      fields = "users("+fields+")"; 
-        try{
-//      To count on other fields besides email .setFields must have the fields variable
-            result = this.directory.users().list().setDomain(domain).setFields(fields).setMaxResults(500).execute();
-        }catch(IOException ioe){
-            throw new BridgeError("There was a error calling the API.",ioe);
-        }
-        
-        int count = result.getUsers().size();
+            
         //Return the response
         return new Count(count);
     }
     
     @Override
     public Record retrieve(BridgeRequest request) throws BridgeError {
-        String structure = request.getStructure();
-        if (!VALID_STRUCTURES.contains(structure)) {
-            throw new BridgeError("Invalid Structure: '" + structure + "' is not a valid structure");
+        // Validate the Structure
+        if (!VALID_STRUCTURES.contains(request.getStructure())) {
+            throw new BridgeError("Invalid Structure: '" + request.getStructure() + "' is not a valid structure");
         }
-     
-        GoogleAdminQualificationParser parser = new GoogleAdminQualificationParser();
-        String query = parser.parse(request.getQuery(),request.getParameters());
-        List<String> fieldList = request.getFields();
 
-        Users result;
-        String domain = null;
-        String googleQuery = null;
-        if(!query.isEmpty()){
-            String[] keyValueArray = query.split("&");
-            for(String pair : keyValueArray){
-                String[] individualValue = pair.split("=");
-                if(individualValue[0].trim().toLowerCase().equals("domain")){
-                    domain = individualValue[1].trim();
-                }              
-                if(individualValue[0].trim().toLowerCase().equals("email") || individualValue[0].trim().toLowerCase().equals("name")){
-                    googleQuery = individualValue[1];
-                }
-            }
-        }
+        // Load fields into a variable and initiate it as an empty list if it is null
+        List<String> fields = request.getFields();
+        if (fields == null) fields = new ArrayList<String>();
         
-        //The API will error if fields is empty when the call is made
-        String fields;
-        if(fieldList == null || fieldList.isEmpty()){
-            throw new BridgeError("A field value is required.");
-        }else{
-            fields = "users("+request.getFieldString()+")";  
-        }
-        
-        try{
-            result = this.directory.users().list().setDomain(domain).setQuery(googleQuery).setFields(fields).setMaxResults(500).execute();
-        }catch(IOException ioe){
-            throw new BridgeError("There was a error calling the API.",ioe);
-        }
-        
-        int count = result.getUsers().size();
-        Map<String,Object> record = new LinkedHashMap();
+        // Add a limit of 2 to the request because only 2 records are needed before
+        // an error will be thrown for multiple results returned.
+        if (request.getMetadata() == null) request.setMetadata(new HashMap<String,String>());
+        request.getMetadata().put("pageSize","2");
 
-        if (count > 1) {
-            throw new BridgeError("Multiple results matched an expected single match query");
-        } else if (count == 1 && fieldList != null) {
-            for (String field : fieldList) {
-                Object value = result.getUsers().get(0).get(field);
-                record.put(field,value);
+        Users users = requestUsers(request);
+        User user = null;
+        if (users.getUsers() != null) {
+            if (users.getUsers().size() > 1) {
+                throw new BridgeError("Multiple results matched an expected single match query");
+            } else if (users.getUsers().size() == 1) {
+                user = users.getUsers().get(0);
             }
         }
 
-        return new Record(record);
+        // Return the response
+        return new Record(user);
     }
 
     @Override
     public RecordList search(BridgeRequest request) throws BridgeError {
-        // Initialize the result data and response variables
-        Map<String,Object> data = new LinkedHashMap();
+        // Initialize the result data
+        List<Record> records = new ArrayList<Record>();
 
-        String structure = request.getStructure();
-        if (!VALID_STRUCTURES.contains(structure)) {
-            throw new BridgeError("Invalid Structure: '" + structure + "' is not a valid structure");
+        // Validate the Structure
+        if (!VALID_STRUCTURES.contains(request.getStructure())) {
+            throw new BridgeError("Invalid Structure: '" + request.getStructure() + "' is not a valid structure");
         }
-
-        GoogleAdminQualificationParser parser = new GoogleAdminQualificationParser();
-        String query = parser.parse(request.getQuery(),request.getParameters());
-        List<String> fieldList = request.getFields();
         
-        // Parse through the response and create the record lists
-        ArrayList<Record> records = new ArrayList<Record>();
+        // Load fields into a variable and initiate it as an empty list if it is null
+        List<String> fields = request.getFields();
+        if (fields == null) fields = new ArrayList<String>();
         
-        Users results;
-        String domain = null;
-        String googleQuery = null;
-        if(!query.isEmpty()){
-            String[] keyValueArray = query.split("&");
-            for(String pair : keyValueArray){
-                String[] individualValue = pair.split("=");
-                if(individualValue[0].trim().toLowerCase().equals("domain")){
-                    domain = individualValue[1].trim();
-                }              
-                if(individualValue[0].trim().toLowerCase().equals("email") || individualValue[0].trim().toLowerCase().equals("name")){
-                    googleQuery = individualValue[1];
-                }
+        Users users = requestUsers(request);
+        if (users.getUsers() != null) {
+            for (User user : users.getUsers()) {
+                if (fields.isEmpty()) fields.addAll(user.keySet());
+                records.add(new Record(user));
             }
         }
         
-        //The API will error if fields is empty when the call is made
-        String fields;
-        if(fieldList == null || fieldList.isEmpty()){
-            throw new BridgeError("A field value is required.");
-        }else{
-            fields = "users("+request.getFieldString()+")";  
-        }
-        
-        try{
-            results = this.directory.users().list().setDomain(domain).setQuery(googleQuery).setFields(fields).setMaxResults(500).execute();
-        }catch(IOException ioe){
-            throw new BridgeError("There was a error calling the API.",ioe);
-        }
-        
-        int count = results.getUsers().size();
-        for(int index=0;index<count;index++){
-            Map<String,Object> record = new LinkedHashMap();
-            for (String field : fieldList) {
-                Object value = results.getUsers().get(index).get(field);
-                record.put(field,value);
-            }
-            records.add(new Record(record));
-        }
+        // Build the return metadata
+        Map<String,String> metadata = new LinkedHashMap<String,String>();
+        metadata.put("size",String.valueOf(records.size()));
+        metadata.put("nextPageToken",users.getNextPageToken());
         
         // Return the response
-        return new RecordList(request.getFields(), records);
+        return new RecordList(fields, records, metadata);
+    }
+    
+    /*----------------------------------------------------------------------------------------------
+     * HELPER METHODS
+     *--------------------------------------------------------------------------------------------*/
+    private Users requestUsers(BridgeRequest request) throws BridgeError {
+        // Parse and replace parameters in the query
+        GoogleAdminQualificationParser parser = new GoogleAdminQualificationParser();
+        String query = parser.parse(request.getQuery(),request.getParameters());
+        
+        // Pull the domain out of the query (if it has been included) and assign it to
+        // a local variable. Add any other parts to the queryParts list so that it can
+        // be rebuilt into a query
+        List<String> queryParts = new ArrayList<String>();
+        String adminDomain = this.domain;
+        // Split the query into individual parts
+        String[] keyValueArray = query.split("&");
+        for(String pair : keyValueArray){
+            String[] individualValue = pair.split("=");
+            if(individualValue[0].trim().toLowerCase().equals("domain")){
+                // If the key is domain, assign the value to the searchDomain variable
+                adminDomain = individualValue[1].trim();
+            } else {
+                // If the key isn't domain, add the query to the list to be rebuilt
+                queryParts.add(pair);
+            }
+        }
+        // Rebuild the query parts into a query string
+        String googleQuery = StringUtils.join(queryParts,"&");
+        if (adminDomain.isEmpty()) throw new BridgeError("A domain must be included in either the Bridge Configuration or Bridge Query.");
+        
+        // Get the limit from the request metadata if included
+        int limit = request.getMetadata("pageSize") != null ? Integer.parseInt(request.getMetadata("pageSize")) : 500;
+        
+        Users users;
+        try {
+            // Build the google call
+            Directory.Users.List list = this.directory.users().list().setQuery(googleQuery).setMaxResults(limit);
+            if (!adminDomain.isEmpty()) list = list.setDomain(adminDomain);
+            if (request.getFields() != null && !request.getFields().isEmpty()) list = list.setFields("nextPageToken,users("+request.getFieldString()+")");
+            if (request.getMetadata("pageToken") != null) list = list.setPageToken(request.getMetadata("pageToken"));
+            // Execute the call to retrieve users
+            users = list.execute();
+        } catch (IOException e) {
+            throw new BridgeError("There was an error calling the API",e);
+        }
+        
+        return users;
     }
 }
