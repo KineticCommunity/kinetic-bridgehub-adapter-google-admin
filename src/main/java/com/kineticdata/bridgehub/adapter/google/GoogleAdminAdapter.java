@@ -23,6 +23,7 @@ import com.google.api.client.json.JsonFactory;
 import com.google.api.services.admin.directory.DirectoryScopes;
 import com.google.api.services.admin.directory.model.*;
 import com.google.api.services.admin.directory.Directory;
+import com.kineticdata.bridgehub.adapter.BridgeUtils;
 import java.security.GeneralSecurityException;
 import java.util.HashMap;
 import org.apache.commons.lang.StringUtils;
@@ -211,9 +212,13 @@ public class GoogleAdminAdapter implements BridgeAdapter {
                 user = users.getUsers().get(0);
             }
         }
+        
+        // Create the new record
+        Record record = new Record(user);
+        if (!fields.isEmpty()) record = BridgeUtils.getNestedFields(fields, Arrays.asList(record)).get(0);
 
         // Return the response
-        return new Record(user);
+        return record;
     }
 
     @Override
@@ -242,6 +247,8 @@ public class GoogleAdminAdapter implements BridgeAdapter {
         Map<String,String> metadata = new LinkedHashMap<String,String>();
         metadata.put("size",String.valueOf(records.size()));
         metadata.put("nextPageToken",users.getNextPageToken());
+        
+        if (!fields.isEmpty()) records = BridgeUtils.getNestedFields(fields, records);
         
         // Return the response
         return new RecordList(fields, records, metadata);
