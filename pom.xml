@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.kineticdata.bridges.adapter</groupId>
     <artifactId>kinetic-bridgehub-adapter-googleadmin</artifactId>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
     <packaging>jar</packaging>
 
     <scm>
@@ -66,7 +66,7 @@
         <dependency>
             <groupId>com.kineticdata.bridges.adapter</groupId>
             <artifactId>kinetic-bridgehub-adapter</artifactId>
-            <version>1.1.0</version>
+            <version>1.2.0</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
