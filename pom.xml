@@ -11,6 +11,17 @@
         <developerConnection>scm:git:https://github.com/kineticcommunity/kinetic-bridgehub-adapter-google-admin.git</developerConnection>
     </scm>
 
+    <distributionManagement>
+        <repository>
+            <id>com.kineticdata</id>
+            <url>http://utilities.kineticdata.com/nexus/content/repositories/releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>com.kineticdata.snapshots</id>
+            <url>http://utilities.kineticdata.com/nexus/content/repositories/snapshots</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <repositories>
         <repository>
           <id>com.kineticdata</id>
@@ -29,6 +40,12 @@
             <groupId>com.google.api-client</groupId>
             <artifactId>google-api-client</artifactId>
             <version>1.21.0</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.google.guava</groupId>
+                    <artifactId>guava-jdk5</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.google.oauth-client</groupId>
@@ -55,6 +72,11 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>1.7.10</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>19.0</version>
         </dependency>
     </dependencies>
     <name>kinetic-bridgehub-adapter-googleadmin</name>
